@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Preyear's Greatest Game</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}
+body{font-family:Arial,sans-serif;background:#080a20;color:white}
+#game{position:relative;width:100vw;height:100vh;background:radial-gradient(circle at 50% 20%,#171b49 0,#080a20 55%,#050615 100%);overflow:hidden}
+#hud{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:20;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;width:96%}
+.pill{background:#15183b;border:1px solid #4c55ae;border-radius:999px;padding:8px 12px;font-weight:bold;font-size:14px;box-shadow:0 0 15px #0008}
+#arena{position:absolute;inset:0}
+.star,.meteor{position:absolute;z-index:5;user-select:none;pointer-events:none}
+.star{font-size:30px;filter:drop-shadow(0 0 10px #ffe66d)}
+.meteor{font-size:30px;filter:drop-shadow(0 0 9px #ff3655)}
+#player{position:absolute;z-index:10;bottom:45px;left:50%;width:74px;height:25px;transform:translateX(-50%);border-radius:14px;background:linear-gradient(90deg,#5ce1e6,#b38cff);box-shadow:0 0 25px #63e6ff}
+#player:after{content:"";position:absolute;left:28px;top:4px;width:18px;height:12px;border-radius:50%;background:#18204c}
+#message{position:absolute;z-index:30;top:45%;left:50%;transform:translate(-50%,-50%);font-size:38px;font-weight:900;opacity:0;transition:.15s;text-shadow:0 5px 25px #000;text-align:center;pointer-events:none}
+.overlay{position:absolute;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:#050615eF}
+.card{width:min(92%,570px);padding:32px;text-align:center;background:#111538;border:1px solid #6068c9;border-radius:24px;box-shadow:0 25px 80px #0009}
+h1{font-size:clamp(30px,7vw,58px);margin:0 0 8px;background:linear-gradient(90deg,#7cf7ff,#b88cff,#ff72c8);-webkit-background-clip:text;color:transparent}
+h2{margin:10px 0 16px}.tag{color:#aeb5ff;font-weight:bold;letter-spacing:2px}
+input{width:min(100%,360px);padding:14px;border-radius:12px;border:1px solid #676ed0;background:#090c28;color:white;text-align:center;font-size:17px;outline:none}
+button{margin-top:18px;padding:14px 28px;border:0;border-radius:999px;background:linear-gradient(90deg,#5ce1e6,#9b6cff);font-weight:bold;font-size:18px;cursor:pointer;color:#080a20}
+.small{opacity:.75;font-size:13px;margin-top:14px}
+#gift{display:none;margin-top:15px;padding:18px;border-radius:18px;background:#1a1e4b;border:1px solid #7c82e8}
+</style>
+</head>
+<body>
+<div id="game">
+  <div id="hud">
+    <div class="pill">⭐ Score: <span id="score">0</span></div>
+    <div class="pill">❤️ Lives: <span id="lives">3</span></div>
+    <div class="pill">🏆 Best: <span id="best">0</span></div>
+    <div class="pill">🎯 Level: <span id="level">1</span>/5</div>
+  </div>
+  <div id="arena"></div><div id="player"></div><div id="message"></div>
+
+  <div class="overlay" id="start">
+    <div class="card">
+      <h1>Preyear welcomes you</h1>
+      <h2>to his greatest game 🎮</h2>
+      <div class="tag">NEON CATCH</div>
+      <p>Enter your name first, then catch ⭐ and dodge ☄️.</p>
+      <input id="name" maxlength="24" placeholder="Enter your name" autocomplete="off">
+      <br><button id="play">START GAME 🚀</button>
+      <div class="small">5 levels • Level 5 is HARD • Made for World Programming Day</div>
+    </div>
+  </div>
+
+  <div class="overlay" id="end" style="display:none">
+    <div class="card">
+      <h1 id="endTitle">Game Over!</h1>
+      <h2><span id="finalName">Player</span> — <span id="finalScore">0</span> points</h2>
+      <p id="rank"></p>
+      <div id="gift"><div style="font-size:48px">🎁☕💖</div>
+        <h2>YOU WON A COFFEE DATE!</h2>
+        <p>Congratulations! Your prize is a coffee date with Preyear. 😄</p>
+      </div>
+      <button id="again">PLAY AGAIN</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const arena=document.getElementById('arena'), player=document.getElementById('player');
+let name='Player',score=0,lives=3,level=1,levelScore=0,running=false,objects=[],last=0,spawn=0,playerX=innerWidth/2;
+let best=Number(localStorage.getItem('preyearBest')||0);
+document.getElementById('best').textContent=best;
+const keys={};
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(['arrowleft','arrowright',' '].includes(e.key.toLowerCase()))e.preventDefault()});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+addEventListener('resize',()=>{playerX=Math.max(37,Math.min(innerWidth-37,playerX));drawPlayer()});
+let dragging=false;
+addEventListener('pointerdown',e=>{dragging=true;playerX=e.clientX;drawPlayer()});
+addEventListener('pointermove',e=>{if(dragging){playerX=e.clientX;drawPlayer()}});
+addEventListener('pointerup',()=>dragging=false);
+
+function drawPlayer(){player.style.left=playerX+'px'}
+function flash(t){const m=document.getElementById('message');m.textContent=t;m.style.opacity=1;setTimeout(()=>m.style.opacity=0,300)}
+function updateHUD(){scoreEl.textContent=score;livesEl.textContent=lives;levelEl.textContent=level}
+const scoreEl=document.getElementById('score'),livesEl=document.getElementById('lives'),levelEl=document.getElementById('level');
+
+function startGame(){
+ const v=document.getElementById('name').value.trim();
+ if(!v){document.getElementById('name').focus();flash('👤 Enter your name first!');return}
+ name=v;score=0;lives=3;level=1;levelScore=0;objects=[];running=true;spawn=150;last=performance.now();arena.innerHTML='';updateHUD();drawPlayer();
+ document.getElementById('start').style.display='none';requestAnimationFrame(loop);
+}
+function makeObject(){
+ const bad=Math.random() < (level===5?.48:.20+level*.04);
+ const el=document.createElement('div');el.className=bad?'meteor':'star';el.textContent=bad?'☄️':'⭐';
+ el.style.left=(20+Math.random()*(innerWidth-40))+'px';el.style.top='-40px';arena.appendChild(el);
+ objects.push({el,x:parseFloat(el.style.left),y:-40,bad,vy:(3+Math.random()*2)*(level===5?1.8:1+(level-1)*.13)});
+}
+function loop(t){
+ if(!running)return;
+ const dt=Math.min(32,t-last);last=t;
+ if(keys['arrowleft']||keys['a'])playerX-=9*dt/16;
+ if(keys['arrowright']||keys['d'])playerX+=9*dt/16;
+ playerX=Math.max(37,Math.min(innerWidth-37,playerX));drawPlayer();
+ spawn-=dt;
+ if(spawn<=0){makeObject();spawn=Math.max(level===5?160:230,600-score*1.5-level*30)}
+ const py=innerHeight-57;
+ for(let i=objects.length-1;i>=0;i--){
+  const o=objects[i];o.y+=o.vy*dt/16;o.el.style.top=o.y+'px';
+  const hit=o.y>py-45&&o.y<py+25&&Math.abs(o.x-playerX)<52;
+  if(hit){
+   o.el.remove();objects.splice(i,1);
+   if(o.bad){lives--;flash('💥 Ouch!');}else{score+=10;levelScore+=10;flash('+10 ⭐');
+    if(level<5&&levelScore>=50){level++;levelScore=0;flash('🎯 LEVEL '+level+'!')}
+    if(level===5&&score>=250)return win();
+   }
+   updateHUD();if(lives<=0)return gameOver();
+  }else if(o.y>innerHeight+40){o.el.remove();objects.splice(i,1)}
+ }
+ requestAnimationFrame(loop);
+}
+function finish(){
+ if(score>best){best=score;localStorage.setItem('preyearBest',best);document.getElementById('best').textContent=best}
+ document.getElementById('finalName').textContent=name;document.getElementById('finalScore').textContent=score;
+ document.getElementById('end').style.display='flex';
+}
+function gameOver(){running=false;document.getElementById('endTitle').textContent='Game Over!';document.getElementById('gift').style.display='none';document.getElementById('rank').textContent=score>=200?'🔥 Incredible run!':'😎 Good try — can you beat it?';finish()}
+function win(){running=false;document.getElementById('endTitle').textContent='🎉 YOU DID IT!';document.getElementById('rank').textContent='🏆 '+name+' conquered all 5 levels!';document.getElementById('gift').style.display='block';finish()}
+document.getElementById('play').onclick=startGame;
+document.getElementById('name').addEventListener('keydown',e=>{if(e.key==='Enter')startGame()});
+document.getElementById('again').onclick=()=>{document.getElementById('end').style.display='none';document.getElementById('start').style.display='flex';document.getElementById('name').value='';document.getElementById('name').focus()};
+drawPlayer();
+</script>
+</body>
+</html>

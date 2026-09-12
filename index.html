@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Preyear's Greatest Game</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:#090b20;color:#fff;overflow:hidden}
+canvas{display:block}
+#hud{position:fixed;top:14px;left:50%;transform:translateX(-50%);width:min(92%,760px);display:flex;justify-content:space-between;gap:10px;z-index:2;font-weight:bold}
+.pill{background:#171a3c;border:1px solid #454b9b;padding:9px 14px;border-radius:999px;box-shadow:0 0 18px #0006}
+#start,#gameover{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#070817dd;z-index:5}
+.card{width:min(92%,560px);text-align:center;background:#111538;border:1px solid #555dcc;border-radius:24px;padding:35px;box-shadow:0 20px 70px #0008}
+h1{font-size:clamp(30px,7vw,58px);margin:0 0 8px;background:linear-gradient(90deg,#7cf7ff,#b88cff,#ff72c8);-webkit-background-clip:text;color:transparent}
+h2{margin:8px 0 14px;font-size:28px}.tag{color:#aeb5ff}.btn{margin-top:20px;border:0;border-radius:999px;padding:14px 28px;font-size:18px;font-weight:bold;cursor:pointer;background:linear-gradient(90deg,#5ce1e6,#9b6cff);color:#090b20}
+.small{opacity:.8;margin-top:16px;font-size:14px}
+#message{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);font-size:42px;font-weight:900;z-index:3;pointer-events:none;opacity:0;text-shadow:0 4px 25px #000}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="pill">⭐ Score: <span id="score">0</span></div>
+  <div class="pill">❤️ Lives: <span id="lives">3</span></div>
+  <div class="pill">🏆 Best: <span id="best">0</span></div>
+  <div class="pill">🎯 Level: <span id="level">1</span>/5</div>
+</div>
+<div id="message"></div>
+<div id="start"><div class="card">
+  <h1>Preyear welcomes you</h1><h2>to his greatest game 🎮</h2>
+  <div class="tag">NEON CATCH</div>
+  <p>Catch the glowing stars ⭐ and dodge the red meteors ☄️.</p>
+  <p><b>Move:</b> ← → keys, A/D, or drag on mobile.</p>
+  <input id="playerName" maxlength="24" placeholder="Enter your name"
+    style="width:90%;padding:13px 16px;border-radius:12px;border:1px solid #666bc4;background:#0b0e2a;color:white;font-size:16px;text-align:center;outline:none">
+  <button class="btn" id="play">START GAME</button>
+  <div class="small">Made for World Programming Day • Good luck! 🏆</div>
+</div></div>
+<div id="gameover" style="display:none"><div class="card">
+  <h1 id="endTitle">Game Over!</h1>
+  <h2><span id="winnerName">Player</span>'s Score: <span id="final">0</span></h2>
+  <p id="rank"></p>
+  <div id="gift" style="display:none;margin-top:18px;padding:20px;border-radius:18px;background:#191d49;border:1px solid #7c82e8">
+    <div style="font-size:48px">🎁☕💖</div>
+    <h2 style="margin:8px 0">YOU WON A COFFEE DATE!</h2>
+    <p>Congratulations! Your prize is a coffee date with Preyear. 😄</p>
+    <p class="tag">You conquered all 5 levels!</p>
+  </div>
+  <button class="btn" id="again">PLAY AGAIN</button>
+</div></div>
+
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H,player,items,score,lives,running,last,spawn,touchX=null;
+let level=1, levelScore=0, playerName='Player', best=+localStorage.getItem('preyearBest')||0;
+document.getElementById('best').textContent=best;
+function resize(){W=c.width=innerWidth;H=c.height=innerHeight;if(player)player.y=H-85} addEventListener('resize',resize);resize();
+const keys={}; addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=1;if(['ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault()});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
+c.addEventListener('pointerdown',e=>touchX=e.clientX);c.addEventListener('pointermove',e=>{if(touchX!==null)touchX=e.clientX});addEventListener('pointerup',()=>touchX=null);
+
+function reset(){
+ player={x:W/2,y:H-85,w:64,h:22,speed:9};items=[];score=0;level=1;levelScore=0;lives=3;spawn=0;running=true;last=performance.now();
+ document.getElementById('score').textContent=0;
+ document.getElementById('lives').textContent=3;
+ document.getElementById('level').textContent=1;
+ document.getElementById('endTitle').textContent='Game Over!';
+ document.getElementById('gift').style.display='none';
+ requestAnimationFrame(loop)
+}
+function star(x,y,r){ctx.save();ctx.translate(x,y);ctx.beginPath();for(let i=0;i<10;i++){let a=-Math.PI/2+i*Math.PI/5,rr=i%2?r:r*.42;ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr)}ctx.closePath();ctx.fillStyle='#ffe66d';ctx.shadowBlur=20;ctx.shadowColor='#ffe66d';ctx.fill();ctx.restore()}
+function meteor(x,y,r){ctx.save();ctx.translate(x,y);ctx.fillStyle='#ff4d67';ctx.shadowBlur=18;ctx.shadowColor='#ff304f';ctx.beginPath();ctx.arc(0,0,r,0,7);ctx.fill();ctx.fillStyle='#ff9a75';ctx.beginPath();ctx.arc(-r*.25,-r*.2,r*.25,0,7);ctx.fill();ctx.restore()}
+function drawBg(t){ctx.fillStyle='#090b20';ctx.fillRect(0,0,W,H);for(let i=0;i<80;i++){let x=(i*97)%W,y=(i*53+t*.025)%H;ctx.fillStyle='rgba(255,255,255,.35)';ctx.fillRect(x,y,2,2)}}
+function loop(t){if(!running)return;let dt=Math.min(32,t-last);last=t;drawBg(t);
+ if(keys['arrowleft']||keys['a'])player.x-=player.speed*dt/16;
+ if(keys['arrowright']||keys['d'])player.x+=player.speed*dt/16;
+ if(touchX!==null)player.x+=(touchX-player.x)*.15;
+ player.x=Math.max(35,Math.min(W-35,player.x));
+ spawn-=dt;if(spawn<=0){
+   let badChance = level===5 ? .46 : .22 + level*.035;
+   let bad=Math.random()<badChance;
+   let speedBoost = level===5 ? 1.75 : 1 + (level-1)*.12;
+   items.push({x:30+Math.random()*(W-60),y:-30,r:bad?17:14,vy:(3+Math.random()*3)*speedBoost,bad});
+   spawn=Math.max(level===5?170:230,650-score*2-level*35)
+ }
+ for(let i=items.length-1;i>=0;i--){let o=items[i];o.y+=o.vy*dt/16;if(o.y>H+40){items.splice(i,1);continue}
+  if(o.y>player.y-30&&o.y<player.y+25&&Math.abs(o.x-player.x)<player.w/2+o.r){
+   items.splice(i,1); if(o.bad){lives--;flash('💥 -1 LIFE');document.getElementById('lives').textContent=lives}
+   else{
+     score+=10;levelScore+=10;flash('+10 ⭐');document.getElementById('score').textContent=score;
+     if(level<5 && levelScore>=50){level++;levelScore=0;flash('🎯 LEVEL '+level+'!');document.getElementById('level').textContent=level}
+     if(level===5 && score>=250){return win()}
+   }
+   if(lives<=0)return end();
+  }
+  o.bad?meteor(o.x,o.y,o.r):star(o.x,o.y,o.r);
+ }
+ ctx.save();ctx.translate(player.x,player.y);ctx.fillStyle='#63e6ff';ctx.shadowBlur=22;ctx.shadowColor='#63e6ff';ctx.beginPath();ctx.roundRect(-32,-10,64,20,10);ctx.fill();ctx.fillStyle='#17204d';ctx.beginPath();ctx.arc(0,-1,8,0,7);ctx.fill();ctx.restore();
+ requestAnimationFrame(loop)}
+function flash(s){let m=document.getElementById('message');m.textContent=s;m.style.opacity=1;m.style.transform='translate(-50%,-50%) scale(1.15)';setTimeout(()=>{m.style.opacity=0},250)}
+function finishBest(){
+ if(score>best){best=score;localStorage.setItem('preyearBest',best);document.getElementById('best').textContent=best}
+ document.getElementById('final').textContent=score;
+ document.getElementById('winnerName').textContent=playerName;
+ document.getElementById('gameover').style.display='flex';
+}
+function end(){
+ running=false;finishBest();
+ document.getElementById('endTitle').textContent='Game Over!';
+ document.getElementById('gift').style.display='none';
+ document.getElementById('rank').textContent=score>=200?'🔥 LEGENDARY! Preyear would be proud.':score>=100?'🚀 Amazing run!':'😎 Good start — try to beat your best!';
+}
+function win(){
+ running=false;finishBest();
+ document.getElementById('endTitle').textContent='🎉 YOU DID IT!';
+ document.getElementById('rank').textContent='🏆 '+playerName+' completed all 5 levels — especially Level 5!';
+ document.getElementById('gift').style.display='block';
+}
+document.getElementById('play').onclick=()=>{
+ const input=document.getElementById('playerName');
+ playerName=input.value.trim()||'Anonymous';
+ document.getElementById('start').style.display='none';
+ reset();
+};
+document.getElementById('again').onclick=()=>{
+ document.getElementById('gameover').style.display='none';
+ document.getElementById('start').style.display='flex';
+ document.getElementById('playerName').focus();
+};
+</script>
+</body></html>
